@@ -52,7 +52,6 @@ def save_uploaded_file(uploaded_file: UploadedFile) -> tuple[Path, bool]:
 
 
 
-
 def get_file_size_kb(file_path: Path) -> float:
     """
     获取指定文件的大小（KB）。
@@ -67,15 +66,6 @@ def get_file_size_kb(file_path: Path) -> float:
     size_kb = size_bytes / 1024
     return round(size_kb,1)
 
-    # ✍️ TODO[手敲]: 计算文件大小并转为 KB
-    # 💡 提示:
-    #     size_bytes = file_path.stat().st_size  # 获取字节数
-    #     size_kb = size_bytes / 1024
-    #     return round(size_kb, 1)
-    # 🎯 期望: 返回 float，例如 234.5
-    pass
-
-
 
 
 def clear_uploaded_files() -> None:
@@ -89,4 +79,3 @@ def clear_uploaded_files() -> None:
     for file_path in UPLOAD_DIR.iterdir():
         if file_path.is_file() and file_path.name != ".gitkeep":
             file_path.unlink()
-
