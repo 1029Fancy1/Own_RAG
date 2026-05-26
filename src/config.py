@@ -4,6 +4,7 @@ StudyMate RAG - 配置模块
 """
 
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 # 加载项目根目录下的 .env 文件
@@ -20,10 +21,10 @@ EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 """嵌入模型名称，默认 text-embedding-3-small"""
 
 # ── 项目路径常量 ──────────────────────────────────────────
-BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR: str = os.path.join(BASE_DIR, "data")
-UPLOAD_DIR: str = os.path.join(DATA_DIR, "uploads")
-CHROMA_DIR: str = os.path.join(DATA_DIR, "chroma")
+BASE_DIR: Path = Path(__file__).resolve().parent.parent
+DATA_DIR: Path = BASE_DIR / "data"
+UPLOAD_DIR: Path = DATA_DIR / "uploads"
+CHROMA_DIR: Path = DATA_DIR / "chroma"
 
 # ── 文件上传限制 ──────────────────────────────────────────
 ALLOWED_EXTENSIONS: set[str] = {".pdf", ".txt", ".md"}
