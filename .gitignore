@@ -22,3 +22,9 @@ Thumbs.db
 # IDE 配置
 .vscode/
 .idea/
+
+# 个人私有文件（笔记、简历、问题记录等）
+计划.md
+结构.md
+简历.md
+问题汇总.md
