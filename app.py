@@ -63,6 +63,30 @@ def get_kb_stats() -> dict:
     }
 
 
+@st.dialog("⚠️ 确认清空知识库")
+def confirm_clear_dialog() -> None:
+    """
+    清空知识库前的二次确认弹窗。
+
+    设计要点：
+    - `st.dialog` 是 Streamlit 1.38+ 的原生弹窗装饰器，比 checkbox 方案更符合心智模型
+    - 确认后调用 st.rerun() 刷新页面，确保 UI 状态归零
+    """
+    st.warning("此操作将**永久删除**知识库中的所有文档和聊天记录，不可恢复！")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("✅ 确认清空", use_container_width=True):
+            st.session_state.parsed_docs = {}
+            st.session_state.messages = []
+            clear_uploaded_files()
+            st.toast("🗑️ 知识库已清空")
+            st.rerun()
+    with col2:
+        if st.button("❌ 取消", use_container_width=True):
+            st.rerun()
+
+
 # ═══════════════════════════════════════════════════════════
 # 左侧 Sidebar — 知识库管理
 # ═══════════════════════════════════════════════════════════
@@ -122,10 +146,7 @@ with st.sidebar:
 
     # ── 清空知识库 ────────────────────────────────────────
     if st.button("🗑️ 清空知识库", use_container_width=True):
-        st.session_state.parsed_docs = {}
-        st.session_state.messages = []
-        clear_uploaded_files()
-        st.toast("🗑️ 知识库已清空")
+        confirm_clear_dialog()
 
     st.divider()
 
