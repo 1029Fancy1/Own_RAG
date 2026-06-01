@@ -1,7 +1,7 @@
 """
 StudyMate RAG - Streamlit 前端主入口
 个人学习知识库问答系统，支持文件上传与基于 RAG 的智能问答。
-文本切分与元数据设计。
+Day 5：Agentic RAG 问答链路 + Tool Calling。
 """
 
 import streamlit as st
@@ -12,9 +12,13 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.file_utils import save_uploaded_file, get_file_size_kb, clear_uploaded_files
+from src.file_utils import save_uploaded_file, get_file_size_kb
 from src.document_loader import load_document
 from src.text_splitter import build_chunks
+from src.ui_utils import display_chat_history, get_kb_stats, confirm_clear_dialog
+from src.vector_store import get_collection, add_chunks_to_store, count_chunks
+from src.embedding_service import get_embedding
+from src.rag_pipeline import answer_question
 
 # ── 页面配置 ──────────────────────────────────────────────
 st.set_page_config(
@@ -36,57 +40,6 @@ if "parsed_docs" not in st.session_state:
     st.session_state.parsed_docs: dict = {}
 
 
-# ── 辅助函数 ──────────────────────────────────────────────
-
-def display_chat_history() -> None:
-    """遍历 session_state.messages 渲染聊天历史。"""
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-
-def get_kb_stats() -> dict:
-    """
-    统计知识库中的文档总数、总字符数、总 chunk 数。
-
-    Returns:
-        {"total_files": int, "total_chars": int, "total_chunks": int}
-    """
-    docs = st.session_state.parsed_docs
-    total_files = len(docs)
-    total_chars = sum(d["char_count"] for d in docs.values())
-    total_chunks = sum(d.get("chunk_count",0) for d in docs.values())
-    return {
-        "total_files": total_files,
-        "total_chars": total_chars,
-        "total_chunks": total_chunks,
-    }
-
-
-@st.dialog("⚠️ 确认清空知识库")
-def confirm_clear_dialog() -> None:
-    """
-    清空知识库前的二次确认弹窗。
-
-    设计要点：
-    - `st.dialog` 是 Streamlit 1.38+ 的原生弹窗装饰器，比 checkbox 方案更符合心智模型
-    - 确认后调用 st.rerun() 刷新页面，确保 UI 状态归零
-    """
-    st.warning("此操作将**永久删除**知识库中的所有文档和聊天记录，不可恢复！")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("✅ 确认清空", use_container_width=True):
-            st.session_state.parsed_docs = {}
-            st.session_state.messages = []
-            clear_uploaded_files()
-            st.toast("🗑️ 知识库已清空")
-            st.rerun()
-    with col2:
-        if st.button("❌ 取消", use_container_width=True):
-            st.rerun()
-
-
 # ═══════════════════════════════════════════════════════════
 # 左侧 Sidebar — 知识库管理
 # ═══════════════════════════════════════════════════════════
@@ -106,24 +59,21 @@ with st.sidebar:
         if not uploaded_files:
             st.warning("请先选择文件，再点击「解析并保存」")
         else:
+            # 获取/创建 ChromaDB 集合（每次写入前确保集合存在）
+            collection = get_collection()
             success_count = 0
 
             for file in uploaded_files:
                 try:
-                    # 2.1 保存到本地磁盘
                     file_path, _ = save_uploaded_file(file)
-
-                    # 2.2 调用文档加载器，抽取纯文本
                     text = load_document(file_path)
-
                     chunks = build_chunks(text, file.name)
-
                     chunk_count = len(chunks)
-                    # chunks 是一个 list[dict]，每个 dict 含 id/text/metadata
+                    
+                    # 调用 add_chunks_to_store 将 chunks 写入 ChromaDB
+                    add_chunks_to_store(collection, chunks, get_embedding)
+                    # 写入后 data/chroma/ 目录出现持久化数据
 
-                    # 2.4 写入 session_state（chunks 和 chunk_count 字段）
- 
-                
                     st.session_state.parsed_docs[file.name] = {
                         "path": str(file_path),
                         "size_kb": get_file_size_kb(file_path),
@@ -131,7 +81,7 @@ with st.sidebar:
                         "char_count": len(text),
                         "uploaded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "chunks": chunks,
-                        "chunk_count": chunk_count
+                        "chunk_count": chunk_count,
                     }
 
                     success_count += 1
@@ -155,10 +105,22 @@ with st.sidebar:
     stats = get_kb_stats()
 
     col1, col2, col3 = st.columns(3)
-    with col1: st.metric("已解析文件", stats["total_files"])
-    with col2: st.metric("总字符数", f"{stats['total_chars']:,}")
-    with col3: st.metric("总 Chunk 数", stats["total_chunks"])
-    #  三列数字并排，chunk 数的变化反映切分结果
+    with col1:
+        st.metric("已解析文件", stats["total_files"])
+    with col2:
+        st.metric("总字符数", f"{stats['total_chars']:,}")
+    with col3:
+        st.metric("总 Chunk 数", stats["total_chunks"])
+
+
+    # 显示 ChromaDB 中的 chunk 数和持久化目录信息
+    # 
+    st.subheader("📊 向量库状态")
+    col = get_collection()
+    st.metric("ChromaDB Chunk 数", count_chunks(col))
+    st.caption(f"持久化路径: data/chroma/")
+    #展示向量库中的实际 chunk 数；空库显示 0
+
 
     if stats["total_files"] > 0:
         st.caption("已解析文件列表：")
@@ -176,7 +138,7 @@ st.markdown(
     "**个人学习知识库问答系统** — "
     "上传你的学习资料，向 AI 提问，精准回答并附带引用来源。"
 )
-st.caption("Day 3 · 文本切分与元数据设计 | RAG 问答 Day 5 上线")
+st.caption("Day 5 · Agentic RAG 问答 + Tool Calling | 5 个 Tool 自主决策")
 st.divider()
 
 
@@ -192,13 +154,15 @@ if st.session_state.parsed_docs:
             doc = st.session_state.parsed_docs[selected_doc]
 
             col1, col2, col3, col4 = st.columns(4)
-            with col1: st.metric("文件大小", f"{doc['size_kb']} KB")
-            with col2: st.metric("字符数", f"{doc['char_count']:,}")
-            with col3: st.metric("Chunk 数", doc.get("chunk_count", 0))
-            with col4: st.caption(f"上传时间: {doc['uploaded_at']}")
-            #展示当前选中文件的 chunk 数量
+            with col1:
+                st.metric("文件大小", f"{doc['size_kb']} KB")
+            with col2:
+                st.metric("字符数", f"{doc['char_count']:,}")
+            with col3:
+                st.metric("Chunk 数", doc.get("chunk_count", 0))
+            with col4:
+                st.caption(f"上传时间: {doc['uploaded_at']}")
 
-            # 显示文档内容预览
             st.text_area(
                 "内容预览（前 2000 字）",
                 doc["text"][:2000],
@@ -215,21 +179,43 @@ if prompt := st.chat_input("请输入你的问题（例如：这篇笔记的核�
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
+
+    # ── 助手回复 ── Day 5: Agentic RAG 问答 ──────────
+    # ✍️ TODO[手敲]: 替换占位回复为实际 Agentic RAG 调用
+    # 💡 提示:
+    #     if st.session_state.parsed_docs:
+    #         with st.spinner("StudyMate 正在思考..."):
+    #             result = answer_question(prompt)
+    #         reply = result["answer"]
+    #         # 展示决策链路
+    #         if result["tool_calls"]:
+    #             with st.expander("查看决策链路"):
+    #                 for i, tc in enumerate(result["tool_calls"], 1):
+    #                     st.caption(f"🔧 Step {i}: {tc['tool']}")
+    #                     st.json({"args": tc["args"], "result": tc["result"][:200]})
+    #     else:
+    #         reply = "🚧 知识库还是空的哦！请先在左侧侧边栏上传文件并点击「解析并保存」。"
+    # 🎯 期望:
+    #   - 有文档时调用 answer_question，展示 LLM 回答 + 决策链路
+    #   - 无文档时引导上传
+    #   - spinner 提示"正在思考"，用户体验友好
+
+    # ↓ Day 4 的占位回复（Day 5 替换为上面代码）
     if st.session_state.parsed_docs:
         kb_stats = get_kb_stats()
         reply = (
-             f"📚 当前知识库已加载 **{kb_stats['total_files']}** 个文件"
-             f"（共 {kb_stats['total_chars']:,} 字符，"
-             f"切分为 **{kb_stats['total_chunks']}** 个 chunk）。\n\n"
-             f"RAG 问答功能将在 **Day 5** 上线。\n\n"
-             f"收到你的问题：\n\n> {prompt}"
-             )
+            f"📚 当前知识库已加载 **{kb_stats['total_files']}** 个文件"
+            f"（共 {kb_stats['total_chars']:,} 字符，"
+            f"切分为 **{kb_stats['total_chunks']}** 个 chunk）。\n\n"
+            f"RAG 问答功能将在 **Day 5** 上线。\n\n"
+            f"收到你的问题：\n\n> {prompt}"
+        )
     else:
         reply = (
-             f"🚧 知识库还是空的哦！请先在左侧侧边栏上传文件并点击「解析并保存」。\n\n"
-             f"你的问题已记录：\n\n> {prompt}"
-             )
-    # 有文档时显示 chunk 数；无文档时引导上传
+            f"🚧 知识库还是空的哦！请先在左侧侧边栏上传文件并点击「解析并保存」。\n\n"
+            f"你的问题已记录：\n\n> {prompt}"
+        )
+
     st.session_state.messages.append({"role": "assistant", "content": reply})
     with st.chat_message("assistant"):
         st.markdown(reply)
