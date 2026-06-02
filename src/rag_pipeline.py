@@ -120,13 +120,11 @@ def _list_docs() -> str:
     返回格式:
         {"total_documents": 3, "documents": ["笔记.pdf", "讲义.md", "论文笔记.txt"]}
     """
-    # ✍️ TODO[手敲]: 调用 list_documents → 格式化为 JSON
-    # 💡 提示:
-    #     col = _get_collection()
-    #     docs = list_documents(col)
-    #     return json.dumps({"total_documents": len(docs), "documents": docs}, ensure_ascii=False)
-    # 🎯 期望: 空库返回 {"total_documents": 0, "documents": []}
-    pass
+    # 调用 list_documents → 格式化为 JSON
+    col = _get_collection()
+    docs = list_documents(col)
+    return json.dumps({"total_documents": len(docs), "documents": docs}, ensure_ascii=False)
+    #空库返回 {"total_documents": 0, "documents": []}
 
 
 # ═══════════════════════════════════════════════════════════
