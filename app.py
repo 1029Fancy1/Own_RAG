@@ -180,41 +180,20 @@ if prompt := st.chat_input("请输入你的问题（例如：这篇笔记的核�
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # ── 助手回复 ── Day 5: Agentic RAG 问答 ──────────
-    # ✍️ TODO[手敲]: 替换占位回复为实际 Agentic RAG 调用
-    # 💡 提示:
-    #     if st.session_state.parsed_docs:
-    #         with st.spinner("StudyMate 正在思考..."):
-    #             result = answer_question(prompt)
-    #         reply = result["answer"]
-    #         # 展示决策链路
-    #         if result["tool_calls"]:
-    #             with st.expander("查看决策链路"):
-    #                 for i, tc in enumerate(result["tool_calls"], 1):
-    #                     st.caption(f"🔧 Step {i}: {tc['tool']}")
-    #                     st.json({"args": tc["args"], "result": tc["result"][:200]})
-    #     else:
-    #         reply = "🚧 知识库还是空的哦！请先在左侧侧边栏上传文件并点击「解析并保存」。"
-    # 🎯 期望:
-    #   - 有文档时调用 answer_question，展示 LLM 回答 + 决策链路
-    #   - 无文档时引导上传
-    #   - spinner 提示"正在思考"，用户体验友好
-
-    # ↓ Day 4 的占位回复（Day 5 替换为上面代码）
+    # ── 助手回复：Agentic RAG 问答 ──
     if st.session_state.parsed_docs:
-        kb_stats = get_kb_stats()
-        reply = (
-            f"📚 当前知识库已加载 **{kb_stats['total_files']}** 个文件"
-            f"（共 {kb_stats['total_chars']:,} 字符，"
-            f"切分为 **{kb_stats['total_chunks']}** 个 chunk）。\n\n"
-            f"RAG 问答功能将在 **Day 5** 上线。\n\n"
-            f"收到你的问题：\n\n> {prompt}"
-        )
+        with st.spinner("StudyMate 正在思考..."):
+            result = answer_question(prompt)
+        reply = result["answer"]
+
+        # 展示决策链路
+        if result["tool_calls"]:
+            with st.expander("🔍 查看决策链路"):
+                for i, tc in enumerate(result["tool_calls"], 1):
+                    st.caption(f"🔧 Step {i}: {tc['tool']}")
+                    st.json({"args": tc["args"], "result": tc["result"][:200]})
     else:
-        reply = (
-            f"🚧 知识库还是空的哦！请先在左侧侧边栏上传文件并点击「解析并保存」。\n\n"
-            f"你的问题已记录：\n\n> {prompt}"
-        )
+        reply = "🚧 知识库还是空的哦！请先在左侧侧边栏上传文件并点击「解析并保存」。"
 
     st.session_state.messages.append({"role": "assistant", "content": reply})
     with st.chat_message("assistant"):

@@ -160,7 +160,7 @@ def chat_with_tools(
     user_message: str,
     execute_tool_fn,
     system_prompt: str = SYSTEM_PROMPT,
-    model: str | None = None,
+    model=None,
     max_turns: int = 5,
 ) -> dict:
     """
@@ -212,78 +212,67 @@ def chat_with_tools(
     # │                   → 继续循环                 │
     # │ 步骤 5: 超 max_turns → 返回超时提示           │
     # └─────────────────────────────────────────────┘
-    #
-    # 💡 完整实现参考：
-    #
-    #     turn = 0
-    #     while turn < max_turns:
-    #         turn += 1
-    #
-    #         # 3. 调用 LLM
-    #         response = _client.chat.completions.create(
-    #             model=model,
-    #             messages=messages,
-    #             tools=TOOLS,
-    #             temperature=0.3,
-    #         )
-    #         msg = response.choices[0].message
-    #
-    #         # 4. 情况A — LLM 给出最终回答（不再需要调用工具）
-    #         if msg.content and not msg.tool_calls:
-    #             return {
-    #                 "answer": msg.content,
-    #                 "tool_calls": tool_call_log,
-    #                 "total_turns": turn,
-    #             }
-    #
-    #         # 4. 情况B — LLM 要求调用工具
-    #         if msg.tool_calls:
-    #             # 将 assistant 消息（含 tool_calls）加入对话历史
-    #             messages.append({
-    #                 "role": "assistant",
-    #                 "content": msg.content,
-    #                 "tool_calls": [
-    #                     {
-    #                         "id": tc.id,
-    #                         "type": "function",
-    #                         "function": {
-    #                             "name": tc.function.name,
-    #                             "arguments": tc.function.arguments,
-    #                         }
-    #                     }
-    #                     for tc in msg.tool_calls
-    #                 ]
-    #             })
-    #
-    #             # 逐个执行工具
-    #             for tc in msg.tool_calls:
-    #                 tool_name = tc.function.name
-    #                 tool_args = json.loads(tc.function.arguments)
-    #                 tool_result = execute_tool_fn(tool_name, tool_args)
-    #
-    #                 # 记录到日志（用于展示）
-    #                 tool_call_log.append({
-    #                     "tool": tool_name,
-    #                     "args": tool_args,
-    #                     "result": str(tool_result)[:800],
-    #                 })
-    #
-    #                 # 将 tool 消息（执行结果）加入对话历史
-    #                 messages.append({
-    #                     "role": "tool",
-    #                     "tool_call_id": tc.id,
-    #                     "content": str(tool_result),
-    #                 })
-    #
-    #     # 5. 超过最大轮次
-    #     return {
-    #         "answer": "抱歉，处理超时。请尝试简化问题后重新提问。",
-    #         "tool_calls": tool_call_log,
-    #         "total_turns": turn,
-    #     }
-    #
-    # 🎯 期望:
-    #   - 简单问题（如"库里有哪些文档"）：1 轮，LLM 调 1 个 tool 后直接回答
-    #   - 复杂问题（如"对比我的笔记和最新论文"）：2-3 轮，调 2-3 个 tool 再综合回答
-    #   - 超限问题：触达 max_turns 后返回超时提示
-    pass
+    
+    turn = 0
+    while turn <max_turns:
+        turn += 1
+
+        response = _client.chat.completions.create(
+            model=model,
+            messages=messages,
+            tools=TOOLS,
+            temperature=0.3,
+             )
+        msg = response.choices[0].message
+    #4. 情况A — LLM 给出最终回答（不再需要调用工具）
+        if msg.content and not msg.tool_calls:
+            return {
+                "answer": msg.content,
+                "tool_calls": tool_call_log, 
+                "total_turns": turn,
+                }
+        
+        if msg.tool_calls:
+            # 将 assistant 消息（含 tool_calls）加入对话历史
+            messages.append({
+                "role": "assistant",
+                "content": msg.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        }
+                    }
+                    for tc in msg.tool_calls
+                ]
+            })
+
+            # 逐个执行工具，结果回传
+            for tc in msg.tool_calls:
+                tool_name = tc.function.name
+                tool_args = json.loads(tc.function.arguments)
+                tool_result = execute_tool_fn(tool_name, tool_args)
+
+                # 记录到日志（用于前端展示决策链路）
+                tool_call_log.append({
+                    "tool": tool_name,
+                    "args": tool_args,
+                    "result": str(tool_result)[:800],
+                })
+
+                # 将 tool 执行结果加入对话历史
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": str(tool_result),
+                })
+
+    # 5. 超过最大轮次 → 返回超时提示
+    return {
+        "answer": "抱歉，处理超时。请尝试简化问题后重新提问。",
+        "tool_calls": tool_call_log,
+        "total_turns": turn,
+    }

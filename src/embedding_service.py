@@ -1,38 +1,45 @@
 """
 StudyMate RAG - 嵌入服务模块
-使用本地 BGE 模型将文本转换为向量。
+使用本地 BGE 模型将文本转换为向量（通过 ModelScope 国内镜像下载）。
 
 Day 4 实现。
 
 技术选型：
-    BAAI/bge-small-zh（BGE 小型中文版）
-    - 512 维向量（OpenAI text-embedding-3-small 是 1536 维，BGE 更轻量）
+    BAAI/bge-small-zh-v1.5（BGE 小型中文版）
+    - 512 维向量
     - 专为中文语义检索优化
-    - 本地运行，不上传数据，零费用
-    - 首次加载自动从 HuggingFace 下载模型（约 130MB），后续缓存
-
-核心 API：
-    model = SentenceTransformer("BAAI/bge-small-zh")
-    embedding = model.encode(text)        → numpy.ndarray (512,)
-    embeddings = model.encode(texts)      → numpy.ndarray (N, 512)
+    - 通过 ModelScope（国内可访问）下载模型，首次约 91MB，后续缓存
 """
 
+import os
+
 from sentence_transformers import SentenceTransformer
+from modelscope import snapshot_download
 
 from src.config import EMBEDDING_MODEL
 
-# 全局模型单例（模块加载时初始化一次，后续复用）
-# 首次加载会下载模型，耗时约 10-30 秒（视网速而定）
-_model = SentenceTransformer(EMBEDDING_MODEL)
+_model = None
+
+
+def _get_model() -> SentenceTransformer:
+    """懒加载 BGE 模型：优先从 ModelScope 下载，失败则回退到 HuggingFace。"""
+    global _model
+    if _model is None:
+        try:
+            model_dir = snapshot_download(
+                "BAAI/bge-small-zh-v1.5",
+                cache_dir=os.path.expanduser("~/.cache/modelscope"),
+            )
+            _model = SentenceTransformer(model_dir)
+        except Exception:
+            # 回退：尝试 HuggingFace（需科学上网或镜像）
+            _model = SentenceTransformer(EMBEDDING_MODEL)
+    return _model
 
 
 def get_embedding(text: str) -> list[float]:
     """
     将单条文本转换为 512 维向量。
-
-    核心 API：
-        _model.encode(text)  →  numpy.ndarray (512,)
-        .tolist()            →  list[float]
 
     Args:
         text: 待向量化的文本
@@ -40,18 +47,13 @@ def get_embedding(text: str) -> list[float]:
     Returns:
         512 维浮点数向量列表
     """
-    embedding = _model.encode(text)
+    embedding = _get_model().encode(text)
     return embedding.tolist()
-
 
 
 def get_embeddings_batch(texts: list[str]) -> list[list[float]]:
     """
     批量生成嵌入向量。
-
-    设计要点：
-    - BGE 模型对批量输入做了内部优化，一次 encode(N 条) 比循环 N 次快
-    - encode() 返回 2D ndarray (N, 512)，.tolist() 转为 list[list[float]]
 
     Args:
         texts: 待向量化的文本列表
@@ -59,5 +61,5 @@ def get_embeddings_batch(texts: list[str]) -> list[list[float]]:
     Returns:
         向量列表，len(返回值) == len(texts)，每个元素 512 维
     """
-    embeddings = _model.encode(texts)
+    embeddings = _get_model().encode(texts)
     return embeddings.tolist()

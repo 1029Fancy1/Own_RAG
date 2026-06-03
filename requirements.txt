@@ -4,3 +4,4 @@ pymupdf
 chromadb
 openai
 sentence-transformers
+modelscope

@@ -91,22 +91,20 @@ def _search_kb(query: str, top_k: int = 5) -> str:
             ]
         }
     """
-    # ✍️ TODO[手敲]: 调用 search_similar → 格式化结果为 JSON 返回
-    # 💡 提示:
-    #     col = _get_collection()
-    #     results = search_similar(col, query, get_embedding, top_k=top_k)
-    #     items = []
-    #     for i in range(len(results["documents"][0])):
-    #         items.append({
-    #             "rank": i + 1,
-    #             "chunk_id": results["ids"][0][i],
-    #             "text": results["documents"][0][i][:300],
-    #             "filename": results["metadatas"][0][i].get("filename", ""),
-    #             "similarity": round(1 - results["distances"][0][i], 4),
-    #         })
-    #     return json.dumps({"count": len(items), "results": items}, ensure_ascii=False)
-    # 🎯 期望: LLM 收到结构化 JSON，可以从中提取 chunk_id 做进一步操作
-    pass
+    # 调用 search_similar → 格式化结果为 JSON 返回
+    col = _get_collection()
+    results = search_similar(col,query,get_embedding,top_k=top_k)
+    items = []
+    for i in range(len(results["documents"][0])):
+        items.append({
+            "rank": i + 1,
+            "chunk_id": results["ids"][0][i],
+            "text": results["documents"][0][i][:300],
+            "filename": results["metadatas"][0][i].get("filename", ""),
+            "similarity": round(1 - results["distances"][0][i], 4),
+        })
+    return json.dumps({"count": len(items), "results": items}, ensure_ascii=False)
+    # LLM 收到结构化 JSON，可以从中提取 chunk_id 做进一步操作
 
 
 # ═══════════════════════════════════════════════════════════
@@ -145,21 +143,20 @@ def _doc_overview(filename: str) -> str:
             "text_preview": "前 300 字..."
         }
     """
-    # ✍️ TODO[手敲]: 从 st.session_state.parsed_docs 获取文档信息 → 格式化为 JSON
-    # 💡 提示:
-    #     doc = st.session_state.parsed_docs.get(filename)
-    #     if not doc:
-    #         return json.dumps({"error": f"文档不存在: {filename}"}, ensure_ascii=False)
-    #     return json.dumps({
-    #         "filename": filename,
-    #         "size_kb": doc["size_kb"],
-    #         "char_count": doc["char_count"],
-    #         "chunk_count": doc.get("chunk_count", 0),
-    #         "uploaded_at": doc["uploaded_at"],
-    #         "text_preview": doc["text"][:300],
-    #     }, ensure_ascii=False)
-    # 🎯 期望: LLM 拿到概览后判断该文档是否与用户问题相关，决定是否深入检索
-    pass
+    # 从 st.session_state.parsed_docs 获取文档信息 → 格式化为 JSON
+    doc = st.session_state.parsed_docs.get(filename)
+    if not doc:
+        return json.dumps({"error": f"文档不存在: {filename}"}, ensure_ascii=False)
+    return json.dumps({
+         "filename": filename,
+         "size_kb": doc["size_kb"],
+         "char_count": doc["char_count"],
+         "chunk_count": doc.get("chunk_count", 0),
+         "uploaded_at": doc["uploaded_at"],
+         "text_preview": doc["text"][:300],
+     }, ensure_ascii=False)
+    # LLM 拿到概览后判断该文档是否与用户问题相关，决定是否深入检索
+    
 
 
 # ═══════════════════════════════════════════════════════════
@@ -183,33 +180,31 @@ def _search_arxiv(query: str, max_results: int = 3) -> str:
             ]
         }
     """
-    # ✍️ TODO[手敲]: 调用 arXiv API → 解析 XML → 格式化为 JSON
-    # 💡 提示:
-    #     base_url = "http://export.arxiv.org/api/query"
-    #     params = urllib.parse.urlencode({
-    #         "search_query": f"all:{query}",
-    #         "start": 0,
-    #         "max_results": max_results,
-    #         "sortBy": "relevance",
-    #     })
-    #     url = f"{base_url}?{params}"
-    #     with urllib.request.urlopen(url, timeout=10) as resp:
-    #         raw_xml = resp.read().decode("utf-8")
-    #     # 简单 XML 解析（使用 xml.etree.ElementTree）
-    #     import xml.etree.ElementTree as ET
-    #     ns = {"atom": "http://www.w3.org/2005/Atom"}
-    #     root = ET.fromstring(raw_xml)
-    #     papers = []
-    #     for entry in root.findall("atom:entry", ns):
-    #         title = entry.find("atom:title", ns).text.strip().replace("\n", " ")
-    #         authors = [a.find("atom:name", ns).text for a in entry.findall("atom:author", ns)]
-    #         summary = entry.find("atom:summary", ns).text.strip().replace("\n", " ")[:300]
-    #         url = entry.find("atom:id", ns).text.strip()
-    #         papers.append({"title": title, "authors": authors, "summary": summary, "url": url})
-    #     return json.dumps({"source": "arXiv", "count": len(papers), "papers": papers}, ensure_ascii=False)
-    # 🎯 期望: 返回最多 max_results 篇论文；网络异常时返回 {"error": "arXiv 请求失败: ..."}
-    pass
-
+    # 调用 arXiv API → 解析 XML → 格式化为 JSON
+    base_url = "http://export.arxiv.org/api/query"
+    params = urllib.parse.urlencode({
+        "search_query": f"all:{query}",
+        "start": 0,
+        "max_results": max_results,
+        "sortBy": "relevance",
+        })
+    url = f"{base_url}?{params}"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            raw_xml = resp.read().decode("utf-8")
+        import xml.etree.ElementTree as ET
+        ns = {"atom": "http://www.w3.org/2005/Atom"}
+        root = ET.fromstring(raw_xml)
+        papers = []
+        for entry in root.findall("atom:entry", ns):
+            title = entry.find("atom:title", ns).text.strip().replace("\n", " ")
+            authors = [a.find("atom:name", ns).text for a in entry.findall("atom:author", ns)]
+            summary = entry.find("atom:summary", ns).text.strip().replace("\n", " ")[:300]
+            paper_url = entry.find("atom:id", ns).text.strip()
+            papers.append({"title": title, "authors": authors, "summary": summary, "url": paper_url})
+        return json.dumps({"source": "arXiv", "count": len(papers), "papers": papers}, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"error": f"arXiv 请求失败: {str(e)}"}, ensure_ascii=False)
 
 # ═══════════════════════════════════════════════════════════
 # Tool Handler #5: Chunk 详情
@@ -226,19 +221,17 @@ def _get_chunk(chunk_id: str) -> str:
             "metadata": {"filename": "笔记.pdf", "chunk_id": 3}
         }
     """
-    # ✍️ TODO[手敲]: 从 ChromaDB 按 id 获取 chunk
-    # 💡 提示:
-    #     col = _get_collection()
-    #     result = col.get(ids=[chunk_id])
-    #     if not result["documents"]:
-    #         return json.dumps({"error": f"chunk 不存在: {chunk_id}"}, ensure_ascii=False)
-    #     return json.dumps({
-    #         "chunk_id": chunk_id,
-    #         "text": result["documents"][0],
-    #         "metadata": result["metadatas"][0],
-    #     }, ensure_ascii=False)
-    # 🎯 期望: LLM 调用此工具获取完整上下文后，能给出更精准的回答
-    pass
+    # 从 ChromaDB 按 id 获取 chunk
+    col = _get_collection()
+    result = col.get(ids=[chunk_id])
+    if not result["documents"]:
+        return json.dumps({"error": f"chunk 不存在: {chunk_id}"}, ensure_ascii=False)
+    return json.dumps({
+             "chunk_id": chunk_id,
+             "text": result["documents"][0],
+             "metadata": result["metadatas"][0],
+         }, ensure_ascii=False)
+    # LLM 调用此工具获取完整上下文后，能给出更精准的回答
 
 
 # ═══════════════════════════════════════════════════════════
