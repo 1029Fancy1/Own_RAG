@@ -5,6 +5,7 @@ Day 5：Agentic RAG 问答链路 + Tool Calling。
 """
 
 import streamlit as st
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -185,6 +186,26 @@ if prompt := st.chat_input("请输入你的问题（例如：这篇笔记的核�
         with st.spinner("StudyMate 正在思考..."):
             result = answer_question(prompt)
         reply = result["answer"]
+
+        # 展示参考来源（从 tool_call_log 提取 kb 检索结果）
+        kb_results = None
+        for tc in result.get("tool_calls", []):
+            if tc["tool"] == "search_knowledge_base":
+                try:
+                    data = json.loads(tc["result"])
+                    if data.get("results"):
+                        kb_results = data["results"]
+                except Exception:
+                    pass
+
+        if kb_results:
+            with st.expander("📌 参考来源"):
+                for src in kb_results:
+                    st.markdown(
+                        f"**{src['rank']}. {src['filename']}** "
+                        f"(chunk: `{src['chunk_id']}`, 相似度: {src['similarity']})"
+                    )
+                    st.caption(src["text"][:200] + "...")
 
         # 展示决策链路
         if result["tool_calls"]:

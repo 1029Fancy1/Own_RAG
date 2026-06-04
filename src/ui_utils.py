@@ -8,9 +8,12 @@ Streamlit 页面中可复用的辅助函数和对话框。
 - 清空确认弹窗
 """
 
+import shutil
+
 import streamlit as st
 
 from src.file_utils import clear_uploaded_files
+from src.config import CHROMA_DIR
 
 
 def display_chat_history() -> None:
@@ -55,7 +58,11 @@ def confirm_clear_dialog() -> None:
             st.session_state.parsed_docs = {}
             st.session_state.messages = []
             clear_uploaded_files()
-            st.toast("🗑️ 知识库已清空")
+            # 同步清空 ChromaDB 向量数据
+            if CHROMA_DIR.exists():
+                shutil.rmtree(CHROMA_DIR)
+                CHROMA_DIR.mkdir(parents=True, exist_ok=True)
+            st.toast("🗑️ 知识库已清空（含 ChromaDB）")
             st.rerun()
     with col2:
         if st.button("❌ 取消", use_container_width=True):
