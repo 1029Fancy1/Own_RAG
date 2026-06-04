@@ -104,7 +104,7 @@ studymate-rag/
 | Day 4 | Embedding 向量化 + ChromaDB 入库 | ✅ |
 | Day 5 | Agentic RAG Tool Calling 全链路 | ✅ |
 | Day 6 | 拒答机制 + 引用来源 + 清空 ChromaDB | ✅ |
-| Day 7 | 测试 + README 完善 | ✅ |
+| Day 7 | 测试 + README 完善 | ✅
 
 ## License
 
